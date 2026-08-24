@@ -1,6 +1,8 @@
 import { clean, Driver, testWithPage } from "#tests";
 import type { KeyInput } from "puppeteer";
 
+declare const DSM: import("#DSM").default;
+
 async function pressKeys(driver: Driver, keys: KeyInput[]) {
   for (const key of keys) await driver.keyboard.press(key);
 }
@@ -103,6 +105,198 @@ testWithPage("Backslash Commands", async (driver) => {
   ]);
   await driver.assertSelectedItemLatex("\\sqrt{x}+\\alpha+\\frac{a+1}{b_{2}}");
 
+  await driver.clean();
+  return clean;
+});
+
+testWithPage("Custom Backslash Commands", async (driver) => {
+  await driver.enablePlugin("backslash-commands");
+  await driver.setPluginSetting("backslash-commands", "customCommands", [
+    { name: "polygon", expansion: "\\operatorname{polygon}" },
+    { name: "avg", expansion: "\\frac{#1+#2}{2}" },
+    { name: "a", expansion: "\\alpha" },
+  ]);
+  await driver.focusIndex(0);
+
+  await pressKeys(driver, [
+    "Backslash",
+    "a",
+    "v",
+    "g",
+    "{",
+    "a",
+    "}",
+    "{",
+    "b",
+    "}",
+    "Enter",
+  ]);
+  await driver.assertSelectedItemLatex("\\frac{a+b}{2}");
+
+  await pressKeys(driver, ["+", "Backslash", "a", "v", "g", "1", "2", "Enter"]);
+  await driver.assertSelectedItemLatex("\\frac{a+b}{2}+\\frac{1+2}{2}");
+
+  await pressKeys(driver, [
+    "+",
+    "Backslash",
+    "a",
+    "v",
+    "g",
+    "Space",
+    "a",
+    "Space",
+    "b",
+    "Enter",
+  ]);
+  await driver.assertSelectedItemLatex(
+    "\\frac{a+b}{2}+\\frac{1+2}{2}+\\frac{a+b}{2}"
+  );
+
+  await pressKeys(driver, [
+    "+",
+    "Backslash",
+    "p",
+    "o",
+    "l",
+    "y",
+    "g",
+    "o",
+    "n",
+    "Enter",
+  ]);
+  await driver.assertSelectedItemLatex(
+    "\\frac{a+b}{2}+\\frac{1+2}{2}+\\frac{a+b}{2}+\\operatorname{polygon}"
+  );
+
+  await pressKeys(driver, [
+    "+",
+    "Backslash",
+    "p",
+    "m",
+    "Backslash",
+    "a",
+    "Enter",
+  ]);
+  await driver.assertSelectedItemLatex(
+    "\\frac{a+b}{2}+\\frac{1+2}{2}+\\frac{a+b}{2}+\\operatorname{polygon}+\\pm\\alpha"
+  );
+
+  await driver.clean();
+  return clean;
+});
+
+testWithPage("Custom Command Expansion Editor", async (driver) => {
+  await driver.enablePlugin("backslash-commands");
+  await driver.evaluate(() => {
+    DSM.pillboxMenus!.toggleMenu("main-menu", true);
+    DSM.pillboxMenus!.toggleCategoryExpanded("utility");
+    DSM.pillboxMenus!.togglePluginExpanded("backslash-commands");
+  });
+
+  await driver.assertSelectorNot(".dsm-settings-custom-commands-header");
+  await driver.click(".dsm-settings-custom-command-add .dsm-btn-icon");
+  await driver.waitForFunction(() =>
+    document.querySelector(".dsm-settings-custom-commands-header")
+  );
+  expect(
+    await driver.evaluate(
+      () => DSM.pluginSettings["backslash-commands"]!.customCommands.length
+    )
+  ).toBe(1);
+  await driver.waitForFunction(() =>
+    document.querySelector(".dsm-settings-custom-command-expansion")
+  );
+  await driver.click(
+    ".dsm-settings-custom-command-expansion .dcg-inline-math-input-view"
+  );
+  await driver.waitForFunction(() =>
+    document
+      .querySelector(".dsm-settings-custom-command-expansion")
+      ?.contains(document.activeElement)
+  );
+  await pressKeys(driver, [
+    "Backslash",
+    "v",
+    "a",
+    "r",
+    "e",
+    "p",
+    "s",
+    "i",
+    "l",
+    "o",
+    "n",
+    "Enter",
+  ]);
+  expect(
+    await driver.evaluate(
+      () =>
+        DSM.pluginSettings["backslash-commands"]!.customCommands[0]!
+          .expansion
+    )
+  ).toBe("\\varepsilon");
+  await driver.click(
+    ".dsm-settings-custom-command-expansion .dcg-inline-math-input-view"
+  );
+  await driver.waitForFunction(() =>
+    document
+      .querySelector(".dsm-settings-custom-command-expansion")
+      ?.contains(document.activeElement)
+  );
+  await driver.evaluate(() =>
+    DSM.pillboxMenus!.togglePluginExpanded("code-golf")
+  );
+  await driver.waitForFunction(
+    () =>
+      !document
+        .querySelector(".dsm-settings-custom-command-expansion")
+        ?.contains(document.activeElement)
+  );
+  await driver.evaluate(() =>
+    DSM.pillboxMenus!.togglePluginExpanded("backslash-commands")
+  );
+  await driver.waitForFunction(() =>
+    document.querySelector(".dsm-settings-custom-command-expansion")
+  );
+  expect(
+    await driver.evaluate(() =>
+      document
+        .querySelector(".dsm-settings-custom-command-expansion")
+        ?.contains(document.activeElement)
+    )
+  ).toBe(false);
+  await driver.click(
+    ".dsm-settings-custom-command-expansion .dcg-inline-math-input-view"
+  );
+  await driver.waitForFunction(() =>
+    document
+      .querySelector(".dsm-settings-custom-command-expansion")
+      ?.contains(document.activeElement)
+  );
+  await driver.evaluate(() => DSM.pillboxMenus!.toggleMenu("main-menu", false));
+  await driver.waitForFunction(
+    () =>
+      !document
+        .querySelector(".dsm-settings-custom-command-expansion")
+        ?.contains(document.activeElement)
+  );
+  await driver.evaluate(() => DSM.pillboxMenus!.toggleMenu("main-menu", true));
+  expect(
+    await driver.evaluate(() =>
+      document
+        .querySelector(".dsm-settings-custom-command-expansion")
+        ?.contains(document.activeElement)
+    )
+  ).toBe(false);
+  expect(
+    await driver.evaluate(
+      () =>
+        DSM.pluginSettings["backslash-commands"]!.customCommands[0]!
+          .expansion
+    )
+  ).toBe("\\varepsilon");
+
+  await driver.evaluate(() => DSM.pillboxMenus!.toggleMenu("main-menu", false));
   await driver.clean();
   return clean;
 });

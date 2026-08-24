@@ -69,6 +69,16 @@ export interface ConfigItemColorList extends ConfigItemGeneric {
   default: string[];
 }
 
+export interface CustomLatexCommand {
+  name: string;
+  expansion: string;
+}
+
+export interface ConfigItemCustomCommands extends ConfigItemGeneric {
+  type: "custom-commands";
+  default: CustomLatexCommand[];
+}
+
 interface SegmentedOption {
   name: string;
   /** Localization key, see en.ftl. */
@@ -88,6 +98,7 @@ export type ConfigItem =
   | ConfigItemString
   | ConfigItemNumber
   | ConfigItemColorList
+  | ConfigItemCustomCommands
   | ConfigSegmentedOptions;
 
 export type GenericSettings = Record<string, any>;

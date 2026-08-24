@@ -325,10 +325,12 @@ custom-mathquill-config-opt-extendedGreek-name = ギリシャ文字の拡張
 custom-mathquill-config-opt-extendedGreek-desc = サポートされているすべてのギリシャ文字の挿入を有効にします。
 custom-mathquill-config-opt-lessFSpacing-name = f の周りのスペースを削減
 custom-mathquill-config-opt-lessFSpacing-desc = 文字 f の周りの余分なスペースを削減します。
-
 ## Backslash Commands
 backslash-commands-name = バックスラッシュコマンド
 backslash-commands-desc = バックスラッシュに続けて LaTeX を入力できるようにします。
+backslash-commands-opt-customCommands-command = コマンド
+backslash-commands-opt-customCommands-expansion = 展開先
+backslash-commands-opt-customCommands-add = カスタムコマンドを追加
 
 ## Code Golf
 code-golf-name = 数式ゴルフ

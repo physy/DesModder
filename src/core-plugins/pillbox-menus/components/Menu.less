@@ -213,6 +213,82 @@
   border-left: 1px solid rgba(0, 0, 0, 0.2);
 }
 
+.dsm-settings-custom-commands-container {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+
+  .dsm-settings-custom-commands-header,
+  .dsm-settings-custom-command-row {
+    display: grid;
+    grid-template-columns: 70px 110px 24px;
+    align-items: center;
+    column-gap: 4px;
+  }
+
+  .dsm-settings-custom-commands-header {
+    color: var(--dcg-custom-text-color-shaded, #666);
+    font-size: 0.85em;
+    text-align: center;
+  }
+
+  .dsm-settings-custom-command-row input,
+  .dsm-settings-custom-command-expansion {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dsm-settings-custom-command-expansion {
+    min-height: 27px;
+    width: 110px;
+
+    .dcg-inline-math-input-view {
+      box-sizing: border-box;
+      min-height: 27px;
+      padding: 3px 5px;
+
+      .dcg-math-field {
+        max-width: none;
+        width: 100px;
+        color: black;
+      }
+    }
+  }
+
+  .dsm-settings-custom-command-name {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+
+    > span {
+      padding-right: 2px;
+    }
+  }
+
+  .dsm-settings-custom-command-add {
+    align-self: center;
+    height: auto;
+
+    .dsm-btn-icon {
+      font-size: 0.8em;
+      height: 20px;
+      line-height: 20px;
+      padding: 0 4px;
+      width: auto;
+    }
+  }
+
+  .dsm-settings-custom-command-row > .dsm-btn-icon {
+    align-self: center;
+    font-size: 0.8em;
+    height: 20px;
+    justify-self: center;
+    min-width: 20px;
+    width: 20px;
+  }
+}
+
 .dcg-popover-title {
   margin-bottom: 10px;
   font-size: 1.15rem;

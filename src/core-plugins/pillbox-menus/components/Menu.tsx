@@ -8,6 +8,7 @@ import {
   Match,
   IfElse,
   IconButton,
+  InlineMathInputView,
   Switch,
   SegmentedControl,
 } from "#components";
@@ -21,6 +22,7 @@ import {
   plugins,
   ConfigItemNumber,
   ConfigSegmentedOptions,
+  CustomLatexCommand,
 } from "#plugins/index.ts";
 import PillboxMenus from "..";
 import "./Menu.less";
@@ -72,6 +74,7 @@ export default class Menu extends Component<{
   pm: PillboxMenus;
 }> {
   pm!: PillboxMenus;
+  customCommandExpansionFocused: number | null = null;
 
   init() {
     this.pm = this.props.pm();
@@ -208,6 +211,8 @@ export default class Menu extends Component<{
                     numberOption(this.pm, item, plugin, pluginSettings),
                   "color-list": () =>
                     colorListOption(this.pm, item, plugin, pluginSettings),
+                  "custom-commands": () =>
+                    customCommandsOption(this, item, plugin, pluginSettings),
                   "segmented-options": () =>
                     segmentedOption(this.pm, item, plugin, pluginSettings),
                 })
@@ -278,6 +283,149 @@ function segmentedOption(
           setSelectedIndex={setSelectedIndex}
           ariaGroupLabel={configItemName(plugin, item)}
         />
+      </div>
+    </div>
+  );
+}
+
+function customCommandsOption(
+  menu: Menu,
+  item: ConfigItem,
+  plugin: SpecificPlugin,
+  settings: GenericSettings
+) {
+  const { pm } = menu;
+  const value = () => settings[item.key] as CustomLatexCommand[];
+  const hasCommands = () => value().length > 0;
+  const setValue = (newValue: CustomLatexCommand[], temporary = false) =>
+    pm.expandedPlugin &&
+    pm.dsm.setPluginSetting(pm.expandedPlugin, item.key, newValue, temporary);
+  const updateCommand = (
+    index: number,
+    field: keyof CustomLatexCommand,
+    newValue: string,
+    temporary: boolean
+  ) => {
+    setValue(
+      value().map((command, commandIndex) =>
+        commandIndex === index ? { ...command, [field]: newValue } : command
+      ),
+      temporary
+    );
+  };
+  const addCommand = () => {
+    setValue([...value(), { name: "", expansion: "" }]);
+  };
+  const removeCommand = (index: number) => {
+    setValue(value().filter((_, commandIndex) => commandIndex !== index));
+  };
+
+  return (
+    <div class="dsm-settings-custom-commands-container">
+      <If predicate={hasCommands}>
+        {() => (
+          <div class="dsm-settings-custom-commands-header">
+            <span>{format(`${plugin.id}-opt-${item.key}-command`)}</span>
+            <span>{format(`${plugin.id}-opt-${item.key}-expansion`)}</span>
+          </div>
+        )}
+      </If>
+      <For
+        each={() =>
+          value().map((command, index): [CustomLatexCommand, number] => [
+            command,
+            index,
+          ])
+        }
+        key={([_, index]) => String(index)}
+      >
+        {(getPair: () => [CustomLatexCommand, number]) => {
+          const command = () => getPair()[0];
+          const index = () => getPair()[1];
+          return (
+            <div class="dsm-settings-custom-command-row">
+              <div class="dsm-settings-custom-command-name">
+                <span aria-hidden="true">\</span>
+                <input
+                  type="text"
+                  aria-label={() =>
+                    format(`${plugin.id}-opt-${item.key}-command`)
+                  }
+                  placeholder="name"
+                  value={() => command().name}
+                  onUpdate={(element: HTMLInputElement) =>
+                    !element.classList.contains("dcg-hovered") &&
+                    (element.value = command().name)
+                  }
+                  onChange={(event: Event) =>
+                    updateCommand(
+                      index(),
+                      "name",
+                      (event.target as HTMLInputElement).value,
+                      false
+                    )
+                  }
+                  onInput={(event: Event) =>
+                    updateCommand(
+                      index(),
+                      "name",
+                      (event.target as HTMLInputElement).value,
+                      true
+                    )
+                  }
+                />
+              </div>
+              <div class="dsm-settings-custom-command-expansion">
+                <InlineMathInputView
+                  containerClass={() => ({
+                    "dsm-backslash-command-scoped-input": true,
+                  })}
+                  latex={() => command().expansion}
+                  isFocused={() =>
+                    menu.customCommandExpansionFocused === index()
+                  }
+                  ariaLabel={format(`${plugin.id}-opt-${item.key}-expansion`)}
+                  placeholder=""
+                  handleLatexChanged={(latex: string) =>
+                    updateCommand(index(), "expansion", latex, false)
+                  }
+                  handlePressedKey={(key: string, event: KeyboardEvent) =>
+                    pm.dsm.backslashCommands?.handleInlineMathQuillKeystroke(
+                      key,
+                      event,
+                      (latex) =>
+                        updateCommand(index(), "expansion", latex, false)
+                    )
+                  }
+                  handleFocusChanged={(focused) => {
+                    menu.customCommandExpansionFocused = focused
+                      ? index()
+                      : null;
+                    pm.updateMenuView();
+                  }}
+                  controller={pm.dsm.cc}
+                  hasError={false}
+                  noFadeout
+                />
+              </div>
+              <IconButton
+                iconClass="dcg-icon-remove"
+                onTap={() => removeCommand(index())}
+              />
+            </div>
+          );
+        }}
+      </For>
+      <div class="dsm-settings-custom-command-add">
+        <span
+          role="button"
+          tabIndex={0}
+          class="dsm-btn-icon"
+          onTap={addCommand}
+        >
+          <i class="dcg-icon-plus" />
+          <span> {format(`${plugin.id}-opt-${item.key}-add`)}</span>
+        </span>
       </div>
     </div>
   );
