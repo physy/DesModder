@@ -397,7 +397,7 @@ function customCommandsOption(
                         updateCommand(index(), "expansion", latex, false)
                     )
                   }
-                  handleFocusChanged={(focused) => {
+                  onFocusedChanged={(focused) => {
                     menu.customCommandExpansionFocused = focused
                       ? index()
                       : null;
