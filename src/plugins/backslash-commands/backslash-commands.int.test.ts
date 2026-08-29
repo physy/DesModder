@@ -113,7 +113,7 @@ testWithPage("Custom Backslash Commands", async (driver) => {
   await driver.enablePlugin("backslash-commands");
   await driver.setPluginSetting("backslash-commands", "customCommands", [
     { name: "polygon", expansion: "\\operatorname{polygon}" },
-    { name: "avg", expansion: "\\frac{#1+#2}{2}" },
+    { name: "avg", expansion: "\\frac{$1+$2}{2}" },
     { name: "a", expansion: "\\alpha" },
   ]);
   await driver.focusIndex(0);

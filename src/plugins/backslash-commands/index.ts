@@ -98,7 +98,7 @@ function parseTemplateArguments(
 function maxTemplateArgument(expansion: string) {
   return Math.max(
     0,
-    ...[...expansion.matchAll(/#([1-9]\d*)/g)].map((match) => Number(match[1]))
+    ...[...expansion.matchAll(/\$([1-9]\d*)/g)].map((match) => Number(match[1]))
   );
 }
 
@@ -142,7 +142,7 @@ function expandCustomCommands(
       continue;
     }
     expanded += customCommand.expansion.replace(
-      /#([1-9]\d*)/g,
+      /\$([1-9]\d*)/g,
       (_, number: string) =>
         expandCustomCommands(
           parsedArguments.values[Number(number) - 1] ?? "",
