@@ -405,8 +405,13 @@ export default class BackslashCommands extends PluginController<Config> {
     const mq = MathQuillView.getFocusedMathquill();
     if (!mq) return;
 
+    const latexBefore = mq.latex();
     const result = this.onMQKeystroke(key, event, mq, onLatexChanged);
-    if (result !== "cancel") mq.keystroke(key, event);
+    if (result !== "cancel") {
+      mq.keystroke(key, event);
+      const latexAfter = mq.latex();
+      if (latexAfter !== latexBefore) onLatexChanged(latexAfter);
+    }
   }
 
   private onMQKeystroke(

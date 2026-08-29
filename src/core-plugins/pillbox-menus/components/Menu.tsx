@@ -357,20 +357,12 @@ function customCommandsOption(
                     !element.classList.contains("dcg-hovered") &&
                     (element.value = command().name)
                   }
-                  onChange={(event: Event) =>
-                    updateCommand(
-                      index(),
-                      "name",
-                      (event.target as HTMLInputElement).value,
-                      false
-                    )
-                  }
                   onInput={(event: Event) =>
                     updateCommand(
                       index(),
                       "name",
                       (event.target as HTMLInputElement).value,
-                      true
+                      false
                     )
                   }
                 />
