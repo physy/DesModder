@@ -7,6 +7,7 @@ import {
   TransparentPlugins,
   IDToPluginSettings,
   PluginInstance,
+  CustomLatexCommand,
 } from "./plugins";
 import { postMessageUp, mapToRecord, recordToMap } from "#utils/messages.ts";
 import { makeControllerHooks } from "./controller-hooks.ts";
@@ -336,7 +337,7 @@ export default class DSM extends TransparentPlugins {
   setPluginSetting(
     pluginID: PluginID,
     key: string,
-    value: boolean | string | number | string[],
+    value: boolean | string | number | string[] | CustomLatexCommand[],
     temporary: boolean = false
   ) {
     this.updatePluginSettings(pluginID, { [key]: value }, temporary);

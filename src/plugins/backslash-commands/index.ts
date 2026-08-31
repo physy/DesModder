@@ -1,6 +1,8 @@
-import { MathQuillField } from "#components";
+import { MathQuillField, MathQuillView } from "#components";
 import { PluginController } from "#plugins/PluginController.ts";
+import type { CustomLatexCommand } from "#plugins/index.ts";
 import "./index.less";
+import { Config, configList } from "./config";
 
 interface PendingCommand {
   mq: MathQuillField;
@@ -8,6 +10,8 @@ interface PendingCommand {
   cursorIndex: number;
   preview: HTMLElement | undefined;
   sourceElement: HTMLElement | undefined;
+  onLatexChanged: ((latex: string) => void) | undefined;
+  previewPointerDown: boolean;
 }
 
 type MathQuillFieldWithLatexWriter = MathQuillField & {
@@ -33,17 +37,143 @@ function getLatexInputCharacter(event: KeyboardEvent) {
   return /^[\x20-\x7e]$/.test(event.key) ? event.key : undefined;
 }
 
+function parseBraceArgument(source: string, startIndex: number) {
+  const start = startIndex + 1;
+  let index = start;
+  let depth = 1;
+  while (index < source.length && depth > 0) {
+    const character = source[index++];
+    if (character === "{") depth++;
+    else if (character === "}") depth--;
+  }
+  if (depth !== 0) return;
+  return {
+    value: source.slice(start, index - 1),
+    endIndex: index,
+  };
+}
+
+/**
+ * Read the next TeX token for each template argument. Groups are passed
+ * without their outer braces; a command or any other character is one token.
+ */
+function parseTemplateArguments(
+  source: string,
+  startIndex: number,
+  count: number
+) {
+  const values: string[] = [];
+  let index = startIndex;
+  while (values.length < count) {
+    // TeX ignores spaces between a control word and its arguments. Do not
+    // consume trailing spaces when there is no following argument, though.
+    const beforeWhitespace = index;
+    while (source[index] === " ") index++;
+    if (index >= source.length) {
+      index = beforeWhitespace;
+      break;
+    }
+
+    if (source[index] === "{") {
+      const argument = parseBraceArgument(source, index);
+      if (!argument) return;
+      values.push(argument.value);
+      index = argument.endIndex;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const commandStart = index++;
+      const nameMatch = /^[A-Za-z]+/.exec(source.slice(index));
+      index += nameMatch?.[0].length ?? 1;
+      values.push(source.slice(commandStart, index));
+      continue;
+    }
+
+    values.push(source[index++]);
+  }
+  return { values, endIndex: index };
+}
+
+function maxTemplateArgument(expansion: string) {
+  return Math.max(
+    0,
+    ...[...expansion.matchAll(/\$([1-9]\d*)/g)].map((match) => Number(match[1]))
+  );
+}
+
+function expandCustomCommands(
+  latex: string,
+  customCommands: readonly CustomLatexCommand[]
+) {
+  let expanded = "";
+  let index = 0;
+  while (index < latex.length) {
+    if (latex[index] !== "\\") {
+      expanded += latex[index++];
+      continue;
+    }
+
+    const nameMatch = /^[A-Za-z]+/.exec(latex.slice(index + 1));
+    if (!nameMatch) {
+      expanded += latex[index++];
+      continue;
+    }
+
+    const [name] = nameMatch;
+    const nameEndIndex = index + 1 + name.length;
+    const customCommand = customCommands.find(
+      (candidate) => candidate.name === name
+    );
+    if (!customCommand) {
+      expanded += latex.slice(index, nameEndIndex);
+      index = nameEndIndex;
+      continue;
+    }
+
+    const parsedArguments = parseTemplateArguments(
+      latex,
+      nameEndIndex,
+      maxTemplateArgument(customCommand.expansion)
+    );
+    if (!parsedArguments) {
+      expanded += latex.slice(index, nameEndIndex);
+      index = nameEndIndex;
+      continue;
+    }
+    expanded += customCommand.expansion.replace(
+      /\$([1-9]\d*)/g,
+      (_, number: string) =>
+        expandCustomCommands(
+          parsedArguments.values[Number(number) - 1] ?? "",
+          customCommands
+        )
+    );
+    index = parsedArguments.endIndex;
+  }
+  return expanded;
+}
+
 /**
  * Adds a LaTeX entry box without patching MathQuill's private `CharCmds`
  * table. The completed contents are parsed by the calculator's MathQuill
  * instance.
  */
-export default class BackslashCommands extends PluginController {
+export default class BackslashCommands extends PluginController<Config> {
   static id = "backslash-commands" as const;
   static enabledByDefault = false;
+  static config = configList;
 
   private pending: PendingCommand | undefined;
   private isEnabled = false;
+  private customCommands: CustomLatexCommand[] = [];
+
+  private setCustomCommands(commands: readonly CustomLatexCommand[]) {
+    this.customCommands = commands.filter(
+      (command) =>
+        /^[A-Za-z]+$/.test(command.name) && command.expansion.length > 0
+    );
+  }
 
   private clearPending() {
     this.pending?.sourceElement?.classList.remove(
@@ -107,7 +237,10 @@ export default class BackslashCommands extends PluginController {
     }
   }
 
-  private beginPendingCommand(mq: MathQuillField) {
+  private beginPendingCommand(
+    mq: MathQuillField,
+    onLatexChanged?: (latex: string) => void
+  ) {
     const previewInfo = this.createPreview(mq);
     const pending: PendingCommand = {
       mq,
@@ -115,11 +248,12 @@ export default class BackslashCommands extends PluginController {
       cursorIndex: 0,
       preview: previewInfo?.preview,
       sourceElement: previewInfo?.sourceElement,
+      onLatexChanged,
+      previewPointerDown: false,
     };
     this.pending = pending;
     this.updatePreview(pending);
   }
-
   private commitPendingCommand(pending: PendingCommand) {
     this.clearPending();
     if (pending.command) this.insertPendingCommand(pending);
@@ -155,17 +289,27 @@ export default class BackslashCommands extends PluginController {
   };
 
   private readonly keydownHandler = (event: KeyboardEvent) => {
-    const result = this.onMQKeystroke(event.key, event);
+    const mq = this.calc.focusedMathQuill?.mq;
+    if (
+      !mq ||
+      !(event.target instanceof Node) ||
+      !mq.el().contains(event.target)
+    ) {
+      return;
+    }
+    if (mq.el().closest(".dsm-backslash-command-scoped-input")) return;
+    const result = this.onMQKeystroke(event.key, event, mq);
     if (result === "cancel") event.stopImmediatePropagation();
   };
 
   private readonly mouseDownHandler = (event: MouseEvent) => {
-    const pending = this.getPendingForFocusedMathquill();
+    const { pending } = this;
     if (!pending) return;
 
     const { target } = event;
     if (target instanceof Node && pending.preview?.contains(target)) return;
-    this.commitPendingCommand(pending);
+    const focusedPending = this.getPendingForFocusedMathquill();
+    if (focusedPending) this.commitPendingCommand(focusedPending);
   };
 
   private readonly focusOutHandler = (event: FocusEvent) => {
@@ -175,6 +319,7 @@ export default class BackslashCommands extends PluginController {
 
     queueMicrotask(() => {
       if (this.pending !== pending) return;
+      if (pending.previewPointerDown) return;
       const { activeElement } = document;
       if (
         activeElement instanceof Node &&
@@ -187,7 +332,7 @@ export default class BackslashCommands extends PluginController {
   };
 
   private readonly previewMouseDownHandler = (event: MouseEvent) => {
-    const pending = this.getPendingForFocusedMathquill();
+    const { pending } = this;
     const { target } = event;
     if (!(target instanceof HTMLElement) || !pending?.preview) return;
 
@@ -198,13 +343,16 @@ export default class BackslashCommands extends PluginController {
 
     event.preventDefault();
     event.stopPropagation();
+    pending.previewPointerDown = true;
+    setTimeout(() => {
+      if (this.pending === pending) pending.previewPointerDown = false;
+    });
     pending.cursorIndex = index;
     this.updatePreview(pending);
     pending.mq.focus();
   };
 
-  private getPendingForFocusedMathquill() {
-    const mq = this.calc.focusedMathQuill?.mq;
+  private getPendingForMathquill(mq: MathQuillField | undefined) {
     if (!mq || !this.pending || this.pending.mq !== mq) {
       this.clearPending();
       return undefined;
@@ -212,9 +360,16 @@ export default class BackslashCommands extends PluginController {
     return this.pending;
   }
 
+  private getPendingForFocusedMathquill() {
+    return this.getPendingForMathquill(this.calc.focusedMathQuill?.mq);
+  }
+
   private insertPendingCommand(pending: PendingCommand) {
     const mq = pending.mq as MathQuillFieldWithLatexWriter;
-    const latex = `\\${pending.command}`;
+    const latex = expandCustomCommands(
+      `\\${pending.command}`,
+      this.customCommands
+    );
     const latexBefore = pending.mq.latex();
 
     // `write()` accepts complete LaTeX fragments, such as `\\frac{a}{b}`.
@@ -222,9 +377,14 @@ export default class BackslashCommands extends PluginController {
       mq.write(latex);
       const latexAfter = pending.mq.latex();
       if (latexAfter !== latexBefore) {
-        this.syncFocusedLatex(latexAfter);
+        this.syncPendingLatex(pending, latexAfter);
       }
     }
+  }
+
+  private syncPendingLatex(pending: PendingCommand, latex: string) {
+    if (pending.onLatexChanged) pending.onLatexChanged(latex);
+    else this.syncFocusedLatex(latex);
   }
 
   private syncFocusedLatex(latex: string) {
@@ -233,19 +393,43 @@ export default class BackslashCommands extends PluginController {
     this.cc.dispatch({ type: "set-item-latex", id: item.id, latex });
   }
 
-  onMQKeystroke(key: string, event: KeyboardEvent): undefined | "cancel" {
+  /**
+   * Handles a key from an InlineMathInputView without bypassing that view's
+   * state owner when the command is committed.
+   */
+  handleInlineMathQuillKeystroke(
+    key: string,
+    event: KeyboardEvent,
+    onLatexChanged: (latex: string) => void
+  ) {
+    const mq = MathQuillView.getFocusedMathquill();
+    if (!mq) return;
+
+    const latexBefore = mq.latex();
+    const result = this.onMQKeystroke(key, event, mq, onLatexChanged);
+    if (result !== "cancel") {
+      mq.keystroke(key, event);
+      const latexAfter = mq.latex();
+      if (latexAfter !== latexBefore) onLatexChanged(latexAfter);
+    }
+  }
+
+  private onMQKeystroke(
+    key: string,
+    event: KeyboardEvent,
+    mq: MathQuillField,
+    onLatexChanged?: (latex: string) => void
+  ): undefined | "cancel" {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
       this.clearPending();
       return;
     }
 
-    const pending = this.getPendingForFocusedMathquill();
+    const pending = this.getPendingForMathquill(mq);
     if (!pending) {
       if (!isBackslashKey(event)) return;
-      const mq = this.calc.focusedMathQuill?.mq;
-      if (!mq) return;
       event.preventDefault();
-      this.beginPendingCommand(mq);
+      this.beginPendingCommand(mq, onLatexChanged);
       return "cancel";
     }
 
@@ -320,7 +504,7 @@ export default class BackslashCommands extends PluginController {
     }
     if (isBackslashKey(event)) {
       event.preventDefault();
-      this.beginPendingCommand(pending.mq);
+      this.beginPendingCommand(pending.mq, pending.onLatexChanged);
       return "cancel";
     }
     // Normal delimiters proceed into MathQuill.
@@ -329,6 +513,7 @@ export default class BackslashCommands extends PluginController {
   afterEnable() {
     if (this.isEnabled) return;
     this.isEnabled = true;
+    this.setCustomCommands(this.settings.customCommands);
     document.addEventListener("keydown", this.keydownHandler, true);
     document.addEventListener("mousedown", this.mouseDownHandler, true);
     document.addEventListener("focusout", this.focusOutHandler, true);
@@ -343,5 +528,9 @@ export default class BackslashCommands extends PluginController {
     document.removeEventListener("focusout", this.focusOutHandler, true);
     document.removeEventListener("beforeinput", this.beforeInputHandler, true);
     this.clearPending();
+  }
+
+  afterConfigChange() {
+    this.setCustomCommands(this.settings.customCommands);
   }
 }

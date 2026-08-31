@@ -328,7 +328,10 @@ custom-mathquill-config-opt-lessFSpacing-desc = 文字 f の周りの余分な�
 
 ## Backslash Commands
 backslash-commands-name = バックスラッシュコマンド
-backslash-commands-desc = バックスラッシュに続けて LaTeX を入力できるようにします。
+backslash-commands-desc = バックスラッシュに続けて LaTeX を入力できるようにします。カスタムコマンドの展開先では $1, $2 のように引数を指定できます。
+backslash-commands-opt-customCommands-command = コマンド
+backslash-commands-opt-customCommands-expansion = 展開先
+backslash-commands-opt-customCommands-add = カスタムコマンドを追加
 
 ## Code Golf
 code-golf-name = 数式ゴルフ

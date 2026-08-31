@@ -333,7 +333,10 @@ custom-mathquill-config-opt-lessFSpacing-desc = Reduces extra spacing around the
 
 ## Backslash Commands
 backslash-commands-name = Backslash Commands
-backslash-commands-desc = Lets you enter LaTeX after typing a backslash.
+backslash-commands-desc = Lets you enter LaTeX after typing a backslash. Custom command expansions can use argument placeholders such as $1 and $2.
+backslash-commands-opt-customCommands-command = Command
+backslash-commands-opt-customCommands-expansion = Expansion
+backslash-commands-opt-customCommands-add = Add Custom Command
 
 ## Code Golf
 code-golf-name = Code Golf
